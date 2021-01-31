@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Program to mute the microphone while you are typing away on your loud keyboard.
+# Inspired by the Unclack app for macOS 
+# This program is written by github.com/adrianlshaw and licensed under GPLv2
+# To install as a background daemon, run "./unclack-linux install"
+# Does not require sudo, but does assume you have systemd and pulseaudio
+SERVICEFILE="
+[Unit]
+Description=unclack-linux
+
+[Service]
+Type=simple
+ExecStart=$HOME/.local/bin/unclack-linux
+Restart=always
+
+[Install]
+WantedBy=default.target
+"
+
+if [[ "$1" == "install" ]]; then
+	MY_PATH="`dirname \"$0\"`"
+	MY_PATH="`( cd \"$MY_PATH\" && pwd )`"
+	if [ -z "$MY_PATH" ] ; then
+		echo "Failed to install"
+		exit 1
+	fi
+	mkdir ~/.local/bin/ --parents
+	cp "$MY_PATH/$0" ~/.local/bin/
+	chmod +x "$HOME/.local/bin/unclack-linux"
+	echo "$SERVICEFILE" > "$HOME/.config/systemd/user/unclack-linux.service"
+	systemctl --user daemon-reload
+	systemctl --user enable unclack-linux
+	systemctl --user restart unclack-linux
+	echo "Service file installed in $HOME/.config/systemd. Binary installed in $HOME/.local/bin/"
+	exit 0
+fi
+
+FILENAME=/tmp/.lastkeypress
+LASTPRESS=0
+CURRENT=0
+THRESHOLD=200
+DEVICE=$(pactl list short sources | grep RUNNING | head -n 1 | cut -f1)
+
+trap ctrl_c INT
+
+function ctrl_c() {
+        echo "Trapped CTRL-C"
+	pactl set-source-mute "$DEVICE" false
+	echo "Unmuted"
+	exit 1
+}
+
+background_task() {
+	xinput test-xi2 --root | grep --line-buffered RawKeyPress |
+		while read -r line; do
+			LASTPRESS=$(date +%s%N | cut -b1-13)
+			echo "$LASTPRESS" > $FILENAME
+		done
+}
+
+rm $FILENAME
+echo 0 > $FILENAME
+
+background_task & # kick off background task
+
+echo "Starting off unmuted"
+pactl set-source-mute "$DEVICE" false # start off with unmuted device
+
+while true
+do
+	# Check active device on every loop. If mic is not active then sleep for a while
+	# to save some energy
+	DEVICE=$(pactl list short sources | grep RUNNING | head -n 1 | cut -f1)
+
+	if [[ -z "$DEVICE" ]]; then
+		sleep 5
+		continue
+	fi
+
+	CURRENT=$(date +%s%N | cut -b1-13)
+	LAST=$(cat $FILENAME)
+	DIFF=$(expr $CURRENT - $LAST)
+
+	echo "$DIFF"
+
+	if [ "$DIFF" -gt "$THRESHOLD" ]; then
+		echo "Unmuting"
+		pactl set-source-mute "$DEVICE" false
+	else
+		echo "Muting"
+		pactl set-source-mute "$DEVICE" true
+	fi
+	sleep 0.1
+
+done
