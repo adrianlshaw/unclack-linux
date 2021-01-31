@@ -4,6 +4,6 @@ If you have a mechanical keyboard and you use Linux, you may be interested in th
 This script automutes your microphone whenever you start typing, which should 
 make things less annoying for your friends or colleagues on voice chat.
 
-To install `./unclack-linux install'
+To install, run: `./unclack-linux install'`
 
 This is inspired by Unclack.app for macOS.
