@@ -6,4 +6,6 @@ make things less annoying for your friends or colleagues on voice chat.
 
 To install, run: `./unclack-linux install`
 
+To start on login, add `systemctl --user start unclack-linux.service` to your `.bashrc` or equivalent.
+
 This is inspired by Unclack.app for macOS.
